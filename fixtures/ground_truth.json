@@ -1,0 +1,25 @@
+{
+  "layout_a": {
+    "file": "layout_a_classic_invoice.pdf",
+    "document_type": "invoice",
+    "vendor_name": "Meridian Office Supplies Ltd.",
+    "invoice_number": "INV-2026-0847",
+    "document_date": "2026-07-14",
+    "due_date": "2026-08-13",
+    "currency": "USD",
+    "subtotal": 1980.5,
+    "tax_amount": 168.34,
+    "total_amount": 2148.84
+  },
+  "layout_b": {
+    "file": "layout_b_receipt_style.pdf",
+    "document_type": "receipt",
+    "vendor_name": "Café Aroma",
+    "invoice_number": "R-1188",
+    "document_date": "2026-07-21",
+    "currency": "EUR",
+    "subtotal": 21.7,
+    "tax_amount": 1.5,
+    "total_amount": 23.2
+  }
+}

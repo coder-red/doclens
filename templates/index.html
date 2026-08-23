@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}LedgerLens &mdash; extraction dashboard{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Extract. Validate. Route.</h1>
+  <p>Upload an invoice, receipt, or credit note (PDF, PNG, JPG). Every field is extracted,
+     checked against arithmetic invariants, and routed to <b>Clean</b>, <b>Flagged</b>,
+     or <b>Failed</b>. Nothing enters your books silently wrong.</p>
+</section>
+
+<section class="cards">
+  <div class="card ok"><span class="num">{{ counts.approved }}</span><span class="label">Clean (approved)</span></div>
+  <div class="card warn"><span class="num">{{ counts.flagged }}</span><span class="label">Flagged for review</span></div>
+  <div class="card bad"><span class="num">{{ counts.failed }}</span><span class="label">Failed</span></div>
+</section>
+
+<section class="panel">
+  <h2>New extraction</h2>
+  {% if not provider_configured %}
+  <div class="alert">No provider key configured &mdash; set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY in the environment.</div>
+  {% endif %}
+  <form id="upload-form" action="/extract" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+    <button type="submit" class="btn primary">Extract fields</button>
+    <span id="upload-status" class="status"></span>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Recent documents</h2>
+  {% if recent %}
+  <table class="docs">
+    <thead>
+      <tr><th>ID</th><th>File</th><th>Vendor</th><th>Invoice #</th><th>Total</th><th>Disposition</th><th>Flags</th><th>When</th></tr>
+    </thead>
+    <tbody>
+      {% for r in recent %}
+      {% set p = r.payload or {} %}
+      <tr>
+        <td><a href="/documents/{{ r.id }}">{{ r.id }}</a></td>
+        <td>{{ r.source_filename }}</td>
+        <td>{{ p.vendor_name or '&mdash;' | safe }}</td>
+        <td>{{ p.invoice_number or '&mdash;' | safe }}</td>
+        <td>{% if p.total_amount is not none %}{{ '%.2f'|format(p.total_amount) }} {{ p.currency or '' }}{% else %}&mdash;{% endif %}</td>
+        <td><span class="badge {{ r.disposition }}">{{ r.disposition }}</span></td>
+        <td>{{ r.findings | length }}</td>
+        <td>{{ r.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No documents processed yet.</p>
+  {% endif %}
+</section>
+
+<script>
+const form = document.getElementById('upload-form');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('upload-status');
+  status.textContent = 'Extracting\u2026';
+  status.className = 'status busy';
+  try {
+    const resp = await fetch('/extract', { method: 'POST', body: new FormData(form) });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'extraction failed');
+    }
+    const record = await resp.json();
+    window.location = '/documents/' + record.id;
+  } catch (err) {
+    status.textContent = err.message;
+    status.className = 'status error';
+  }
+});
+</script>
+{% endblock %}

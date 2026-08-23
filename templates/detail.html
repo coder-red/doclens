@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Document {{ record.id }} &mdash; LedgerLens{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Back to dashboard</a></p>
+
+<section class="panel">
+  <h2>{{ record.source_filename }} <span class="badge {{ record.disposition }}">{{ record.disposition }}</span>
+      <span class="badge review-{{ record.review_status }}">{{ record.review_status }}</span></h2>
+  <div class="meta">
+    <div><b>ID</b> {{ record.id }}</div>
+    <div><b>Processed</b> {{ record.created_at }}</div>
+    <div><b>Provider</b> {{ record.provider }} / {{ record.model }}</div>
+    <div><b>Latency</b> {{ record.latency_ms }} ms</div>
+    <div><b>Pages</b> {{ record.page_count }}</div>
+    <div><b>SHA-256</b> <code class="hash">{{ record.content_sha256 }}</code></div>
+  </div>
+</section>
+
+{% if record.payload %}
+<section class="panel">
+  <h2>Extracted fields</h2>
+  {% set p = record.payload %}
+  <table class="fields">
+    <tr><th>Document type</th><td>{{ p.document_type }}</td></tr>
+    <tr><th>Vendor</th><td>{{ p.vendor_name or '—' }}</td></tr>
+    <tr><th>Tax ID</th><td>{{ p.vendor_tax_id or '—' }}</td></tr>
+    <tr><th>Invoice #</th><td>{{ p.invoice_number or '—' }}</td></tr>
+    <tr><th>Document date</th><td>{{ p.document_date or '—' }}</td></tr>
+    <tr><th>Due date</th><td>{{ p.due_date or '—' }}</td></tr>
+    <tr><th>Currency</th><td>{{ p.currency or '—' }}</td></tr>
+    <tr><th>Subtotal</th><td>{% if p.subtotal is not none %}{{ '%.2f'|format(p.subtotal) }}{% else %}—{% endif %}</td></tr>
+    <tr><th>Tax</th><td>{% if p.tax_amount is not none %}{{ '%.2f'|format(p.tax_amount) }}{% else %}—{% endif %}</td></tr>
+    <tr><th>Total</th><td class="strong">{% if p.total_amount is not none %}{{ '%.2f'|format(p.total_amount) }} {{ p.currency or '' }}{% else %}—{% endif %}</td></tr>
+  </table>
+
+  {% if p.line_items %}
+  <h3>Line items</h3>
+  <table class="docs">
+    <thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead>
+    <tbody>
+      {% for item in p.line_items %}
+      <tr><td>{{ loop.index }}</td><td>{{ item.description or '—' }}</td><td>{{ item.quantity if item.quantity is not none else '—' }}</td><td>{{ item.unit_price if item.unit_price is not none else '—' }}</td><td>{{ '%.2f'|format(item.line_total) if item.line_total is not none else '—' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if p.fields_with_issues %}
+  <h3>Model-reported uncertainties</h3>
+  <ul class="issues">
+    {% for issue in p.fields_with_issues %}
+    <li><b>{{ issue.field }}</b> ({{ issue.issue_type }}){% if issue.notes %} — {{ issue.notes }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Validation findings</h2>
+  {% if record.findings %}
+  <table class="docs findings-table">
+    <thead><tr><th>Rule</th><th>Severity</th><th>Field</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for f in record.findings %}
+      <tr class="sev-{{ f.severity }}">
+        <td><code>{{ f.rule_id }}</code></td>
+        <td><span class="badge {{ 'bad' if f.severity == 'error' else 'warn' }}">{{ f.severity }}</span></td>
+        <td>{{ f.field }}</td>
+        <td>{{ f.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">All checks passed — every arithmetic invariant holds and no field was reported uncertain.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Human review</h2>
+  <form action="/documents/{{ record.id }}/review" method="post" class="review-form">
+    <select name="review_status">
+      <option value="approved" {% if record.review_status == 'approved' %}selected{% endif %}>Approved by reviewer</option>
+      <option value="rejected" {% if record.review_status == 'rejected' %}selected{% endif %}>Rejected / corrected upstream</option>
+      <option value="pending" {% if record.review_status == 'pending' %}selected{% endif %}>Pending</option>
+    </select>
+    <input type="text" name="review_note" placeholder="Review note (optional)" value="{{ record.review_note or '' }}">
+    <button type="submit" class="btn">Save</button>
+  </form>
+</section>
+
+<details class="raw">
+  <summary>Raw model response</summary>
+  <pre>{{ record.raw_response | tojson(indent=2) if record.raw_response else 'n/a' }}</pre>
+</details>
+{% endblock %}
