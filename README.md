@@ -1,5 +1,7 @@
 # DocLens
 
+**Live demo: [doclenss.onrender.com](https://doclenss.onrender.com)** — free-tier hosting, so the first load after 15 idle minutes takes ~50 seconds to spin up. Uploads from the demo are disposable (ephemeral disk).
+
 Invoice, receipt, and credit-note extraction with **arithmetic guardrails**. Upload a PDF or photo; get back structured fields (vendor, dates, totals, line items) that have been mechanically verified before they touch your books. Clean records are exported. Everything else is flagged — never silently booked.
 
 Built for the messy real world: any vendor layout, scanned documents, phone photos of receipts.
