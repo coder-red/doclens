@@ -29,7 +29,7 @@ class ReviewRequest(BaseModel):
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-app = FastAPI(title="LedgerLens", version="1.0.0")
+app = FastAPI(title="DocLens", version="1.0.0")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _store_instance: Store | None = None
@@ -160,7 +160,7 @@ def export_excel(store: Store = Depends(get_store)):
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="ledgerlens_extractions.xlsx"'},
+        headers={"Content-Disposition": 'attachment; filename="DocLens_extractions.xlsx"'},
     )
 
 

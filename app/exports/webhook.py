@@ -9,7 +9,7 @@ import httpx
 from ..config import Settings
 from ..store import Store
 
-log = logging.getLogger("ledgerlens.webhook")
+log = logging.getLogger("DocLens.webhook")
 
 
 def dispatch_approved(record: dict[str, Any], store: Store, settings: Settings) -> bool:

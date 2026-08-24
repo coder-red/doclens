@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}LedgerLens{% endblock %}</title>
+  <title>{% block title %}DocLens{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <nav class="topnav">
-  <a class="brand" href="/">LedgerLens</a>
+  <a class="brand" href="/">DocLens</a>
   <span class="tagline">document extraction with arithmetic guardrails</span>
   <span class="spacer"></span>
   <a href="/export/excel.xlsx">Excel</a>
@@ -17,6 +17,6 @@
 <main>
 {% block content %}{% endblock %}
 </main>
-<footer>LedgerLens &mdash; clean records are exported; everything else is flagged, never silently booked.</footer>
+<footer>DocLens &mdash; clean records are exported; everything else is flagged, never silently booked.</footer>
 </body>
 </html>

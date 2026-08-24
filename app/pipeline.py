@@ -17,7 +17,7 @@ from .routing import decide_disposition
 from .store import Store
 from .validation import validate_payload
 
-log = logging.getLogger("ledgerlens.pipeline")
+log = logging.getLogger("DocLens.pipeline")
 
 
 @dataclass

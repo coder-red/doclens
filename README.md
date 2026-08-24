@@ -1,4 +1,4 @@
-# LedgerLens
+# DocLens
 
 Invoice, receipt, and credit-note extraction with **arithmetic guardrails**. Upload a PDF or photo; get back structured fields (vendor, dates, totals, line items) that have been mechanically verified before they touch your books. Clean records are exported. Everything else is flagged — never silently booked.
 
@@ -6,7 +6,7 @@ Built for the messy real world: any vendor layout, scanned documents, phone phot
 
 ## What it does
 
-| Requirement | How LedgerLens handles it |
+| Requirement | How DocLens handles it |
 |---|---|
 | Structured fields from PDFs **and images** | Every input is rasterized (PyMuPDF/Pillow) and read by a vision LLM under a strict JSON schema — digital PDFs, scans, photos, and Word documents take the same path (.docx is normalized to rendered pages first) |
 | Flag low-confidence extractions | Two independent flag sources: model-declared uncertainties (`fields_with_issues`) plus deterministic validation findings. Any finding routes the document out of the clean lane |
@@ -17,7 +17,7 @@ Built for the messy real world: any vendor layout, scanned documents, phone phot
 
 ## Why routing runs on arithmetic, not model confidence
 
-Vision models are frequently *confidently wrong* on a misread digit, and their self-reported certainty correlates poorly with correctness. LedgerLens therefore treats the model's own uncertainty flags as advisory only and makes the go/no-go decision from deterministic invariants:
+Vision models are frequently *confidently wrong* on a misread digit, and their self-reported certainty correlates poorly with correctness. DocLens therefore treats the model's own uncertainty flags as advisory only and makes the go/no-go decision from deterministic invariants:
 
 ```
 line items sum ≈ printed subtotal          (V005, error)
@@ -99,7 +99,7 @@ python fixtures/generate_fixtures.py
 53 unit/API tests run fully offline against a fake provider. A live end-to-end test against the real LLM is opt-in:
 
 ```bash
-set LEDGERLENS_LIVE_TEST=1 & set GEMINI_API_KEY=... & .venv\Scripts\python -m pytest tests\test_integration_live.py -v
+set DocLens_LIVE_TEST=1 & set GEMINI_API_KEY=... & .venv\Scripts\python -m pytest tests\test_integration_live.py -v
 ```
 
 ## HTTP API
@@ -130,7 +130,7 @@ curl -F "file=@fixtures/layout_b_receipt_style.pdf" http://127.0.0.1:8000/extrac
 | `*_MODEL` | per-provider default | pin versions for production reproducibility |
 | `MAX_PAGES` | `5` | multi-page PDFs truncated defensively |
 | `MAX_IMAGE_PX` | `2000` | longest-side cap before upload |
-| `DB_PATH` | `data/ledgerlens.db` | SQLite audit store |
+| `DB_PATH` | `data/DocLens.db` | SQLite audit store |
 | `WEBHOOK_URL` / `WEBHOOK_SECRET` | — | POSTs approved records with `X-Webhook-Secret`; delivery attempts are logged |
 
 ## Deployment

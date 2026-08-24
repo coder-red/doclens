@@ -21,14 +21,14 @@ class Settings(BaseSettings):
     max_pages: int = 5
     max_image_px: int = 2000
 
-    db_path: Path = Path("data/ledgerlens.db")
+    db_path: Path = Path("data/DocLens.db")
     export_dir: Path = Path("data")
 
     webhook_url: str | None = None
     webhook_secret: str | None = None
     webhook_timeout_s: float = 10.0
 
-    app_name: str = "LedgerLens"
+    app_name: str = "DocLens"
 
 
 @lru_cache

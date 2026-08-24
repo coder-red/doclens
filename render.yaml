@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ledgerlens
+    name: DocLens
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt

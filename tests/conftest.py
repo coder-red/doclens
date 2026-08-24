@@ -57,7 +57,7 @@ def _default_payload() -> dict:
 def settings(tmp_path, monkeypatch):
     monkeypatch.delenv("WEBHOOK_URL", raising=False)
     s = Settings(
-        db_path=tmp_path / "test-ledgerlens.db",
+        db_path=tmp_path / "test-DocLens.db",
         export_dir=tmp_path / "exports",
         gemini_api_key="test-key",
     )

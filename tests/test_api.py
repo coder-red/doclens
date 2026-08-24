@@ -88,7 +88,7 @@ def test_dashboard_and_detail_pages_render(client, store):
     doc_id = resp.json()["id"]
     dash = client.get("/", headers={"accept": "text/html"})
     assert dash.status_code == 200
-    assert "LedgerLens" in dash.text
+    assert "DocLens" in dash.text
 
     detail = client.get(f"/documents/{doc_id}", headers={"accept": "text/html"})
     assert detail.status_code == 200
