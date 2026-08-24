@@ -10,7 +10,7 @@ Built for the messy real world: any vendor layout, scanned documents, phone phot
 
 ## What it does
 
-| Requirement | How DocLens handles it |
+| Capability | How DocLens handles it |
 |---|---|
 | Structured fields from PDFs **and images** | Every input is rasterized (PyMuPDF/Pillow) and read by a vision LLM under a strict JSON schema — digital PDFs, scans, photos, and Word documents take the same path (.docx is normalized to rendered pages first) |
 | Flag low-confidence extractions | Two independent flag sources: model-declared uncertainties (`fields_with_issues`) plus deterministic validation findings. Any finding routes the document out of the clean lane |
@@ -73,14 +73,12 @@ A malformed first pass triggers one automatic schema-repair re-request before gi
 
 ```bash
 python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt     # Windows
-copy .env.example .env                             # add at least one API key
-
+pip install -r requirements.txt
+cp .env.example .env        # then add at least one API key (Windows: copy .env.example .env)
 uvicorn app.main:app --reload
-# open http://127.0.0.1:8000
 ```
 
-Any one of `GEMINI_API_KEY` (free tier works), `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` enables extraction. Provider is auto-selected by available keys, or pinned via `PROVIDER=`.
+Open http://127.0.0.1:8000 (Windows venv paths: `.venv\Scripts\`). Any one of `GEMINI_API_KEY` (free tier works), `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` enables extraction. Provider is auto-selected by available keys, or pinned via `PROVIDER=`.
 
 ### Test documents
 
@@ -95,16 +93,16 @@ python fixtures/generate_fixtures.py
 - `layout_c_word_invoice.docx` — Word-document invoice (plumbing services): proves the .docx normalization path
 - `layout_b_receipt_degraded.jpg` — rotated, blurred, noisy JPEG simulating a phone photo
 
-### Tests
+## Tests
 
 ```bash
-.venv\Scripts\python -m pytest
+python -m pytest
 ```
 
 55 tests run fully offline against a fake provider. A live end-to-end test against the real LLM is opt-in:
 
 ```cmd
-set DOCLENS_LIVE_TEST=1 && set GEMINI_API_KEY=... && .venv\Scripts\python -m pytest tests\test_integration_live.py -v
+set DOCLENS_LIVE_TEST=1 && set GEMINI_API_KEY=... && python -m pytest tests\test_integration_live.py -v
 ```
 
 ## HTTP API
@@ -140,32 +138,23 @@ curl -F "file=@fixtures/layout_b_receipt_style.pdf" http://127.0.0.1:8000/extrac
 
 ## Deployment
 
-Works anywhere Python runs. This repo ships `render.yaml` + `Dockerfile`. On [Render](https://render.com):
+The repo ships `render.yaml` + `Dockerfile`. Easiest path on [Render](https://render.com): Dashboard → **New → Web Service** → connect this repo → Free instance → add `GEMINI_API_KEY` in Environment.
 
-- Easiest: Dashboard → **New → Web Service** → connect this repo → pick the Free instance → add `GEMINI_API_KEY` in Environment.
-- Or with the Render CLI:
+Free-instance caveats: the service sleeps after 15 idle minutes (~1 min wake-up), and the filesystem is ephemeral — hosted demo data is disposable. For production, attach a persistent disk or swap `store.py` for Postgres.
 
-```bash
-render login
-render services create --name doclens --type web_service \
-  --repo https://github.com/coder-red/doclens --runtime python \
-  --build-command "pip install -r requirements.txt" \
-  --start-command "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-```
-
-Free-instance caveats (per [Render's docs](https://render.com/docs/free)):
-
-- The service sleeps after **15 minutes without traffic**; the next request waits ~1 minute while it spins back up.
-- The filesystem is **ephemeral**: the SQLite database is erased on every redeploy, restart, *and* spin-down. Treat hosted demo data as disposable; local runs keep everything.
-- A workspace shares **750 free instance hours/month** across all its free services — keeping several services awake 24/7 can exhaust the pool and suspend them until the month resets.
-
-For production: attach a persistent disk (paid) or swap `store.py` for Postgres — note free-tier Render Postgres expires 30 days after creation, so use a paid plan for anything real.
-
-## Design decisions worth defending in an interview
+## Engineering decisions
 
 1. **One schema, N layouts.** Per-vendor templates don't scale past ~10 vendors. The Pydantic contract (`app/models.py`) doubles as the JSON-schema constraint sent to providers and the runtime validator — one source of truth.
 2. **Escape hatches over guesses.** The prompt and schema make `null` + an issue entry a *first-class success outcome*. The failure mode that matters isn't crashing, it's a plausible wrong total.
 3. **Arithmetic as the routing signal.** Line-item reconciliation catches dropped/misread rows deterministically — no model opinion involved.
 4. **Repair pass instead of hard fail.** One bounded re-ask with the exact validation error recovers most schema drift without unbounded retries.
 5. **Provenance everywhere.** SHA-256 of inputs, raw responses, per-rule findings, review state — the audit log can answer "why did the system believe this number?" months later.
+
+## Known limitations
+
+- **Single-node storage.** SQLite is deliberate at this scale but means one worker; multi-instance needs Postgres.
+- **Demo hosting is disposable by design** — free-tier filesystem wipes on restart; durable deployments need a disk or managed DB.
+- **English/latin-script documents only** were validated; other scripts need prompt and fixture coverage.
+- **No auth** on the review UI — fine as an internal tool behind a VPN, not exposed as-is.
+- **Next up:** reviewer-side field correction with re-validation, and per-vendor accuracy tracking from the audit log.
 
