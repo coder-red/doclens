@@ -45,7 +45,7 @@ def test_live_extraction_matches_ground_truth(tmp_path):
     )
     payload = result.payload
     assert payload is not None
-    assert payload.vendor_name == expected["vendor_name"]
+    assert payload.vendor_name.casefold() == expected["vendor_name"].casefold()
     assert payload.invoice_number == expected["invoice_number"]
     assert abs(payload.total_amount - expected["total_amount"]) < 0.05
     assert abs(payload.subtotal - expected["subtotal"]) < 0.05

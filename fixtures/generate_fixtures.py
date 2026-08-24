@@ -38,6 +38,19 @@ GROUND_TRUTH_B = {
     "total_amount": 23.20,
 }
 
+GROUND_TRUTH_C = {
+    "file": "layout_c_word_invoice.docx",
+    "document_type": "invoice",
+    "vendor_name": "Northgate Plumbing Services LLC",
+    "invoice_number": "NP-26-0311",
+    "document_date": "2026-08-02",
+    "due_date": "2026-09-01",
+    "currency": "USD",
+    "subtotal": 845.00,
+    "tax_amount": 59.15,
+    "total_amount": 904.15,
+}
+
 
 def _draw_layout_a(path: Path) -> None:
     c = rl_canvas.Canvas(str(path), pagesize=letter)
@@ -151,6 +164,46 @@ def _draw_layout_b(path: Path) -> None:
     c.save()
 
 
+def _build_layout_c_docx(path: Path) -> None:
+    import docx
+    from docx.shared import Pt
+
+    d = docx.Document()
+    d.add_heading("Northgate Plumbing Services LLC", level=1)
+    p = d.add_paragraph("87 Ridgeway Ave, Portland, OR 97205\nLicense #OR-PLB-44120")
+    p.runs[0].font.size = Pt(9)
+    d.add_paragraph("")
+    meta = d.add_paragraph()
+    meta.add_run("INVOICE NP-26-0311\n").bold = True
+    meta.add_run("Invoice date: August 2, 2026\nDue date: September 1, 2026\nBill to: Hale Residence, 12 Cedar Ct")
+    d.add_paragraph("")
+
+    table = d.add_table(rows=5, cols=4)
+    table.style = "Table Grid"
+    rows = [
+        ("Description", "Qty", "Rate (USD)", "Amount (USD)"),
+        ("Emergency leak repair", "2.5", "120.00", "300.00"),
+        ("Replace angle stop valves", "4", "38.75", "155.00"),
+        ("Water heater flush", "1", "190.00", "190.00"),
+        ("Pipe insulation (per ft)", "50", "4.00", "200.00"),
+    ]
+    for r_idx, row_vals in enumerate(rows):
+        for c_idx, val in enumerate(row_vals):
+            para = table.rows[r_idx].cells[c_idx].paragraphs[0]
+            run = para.add_run(val)
+            run.bold = r_idx == 0
+
+    d.add_paragraph("")
+    totals = d.add_paragraph()
+    totals.add_run("Subtotal: $845.00\n").bold = False
+    totals.add_run("Tax (7%): $59.15\n")
+    totals.add_run("TOTAL DUE: $904.15").bold = True
+    d.add_paragraph("")
+    terms = d.add_paragraph("Payment due within 30 days. Make checks to Northgate Plumbing Services LLC.")
+    terms.runs[0].font.size = Pt(8)
+    d.save(str(path))
+
+
 def _degraded_variant(source_pdf: Path, target_png: Path) -> None:
     import pymupdf
 
@@ -179,13 +232,18 @@ def generate_all(force: bool = False) -> dict[str, Path]:
         _draw_layout_b(pdf_b)
     outputs["receipt_style"] = pdf_b
 
+    docx_c = FIXTURE_DIR / GROUND_TRUTH_C["file"]
+    if force or not docx_c.exists():
+        _build_layout_c_docx(docx_c)
+    outputs["word_invoice"] = docx_c
+
     degraded = FIXTURE_DIR / "layout_b_receipt_degraded.jpg"
     if force or not degraded.exists():
         _degraded_variant(pdf_b, degraded)
     outputs["degraded_receipt"] = degraded
 
     gt_path = FIXTURE_DIR / "ground_truth.json"
-    gt = {"layout_a": GROUND_TRUTH_A, "layout_b": GROUND_TRUTH_B}
+    gt = {"layout_a": GROUND_TRUTH_A, "layout_b": GROUND_TRUTH_B, "layout_c": GROUND_TRUTH_C}
     gt_path.write_text(json.dumps(gt, indent=2, ensure_ascii=False), encoding="utf-8")
     outputs["ground_truth"] = gt_path
     return outputs

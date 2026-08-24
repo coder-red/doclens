@@ -21,5 +21,17 @@
     "subtotal": 21.7,
     "tax_amount": 1.5,
     "total_amount": 23.2
+  },
+  "layout_c": {
+    "file": "layout_c_word_invoice.docx",
+    "document_type": "invoice",
+    "vendor_name": "Northgate Plumbing Services LLC",
+    "invoice_number": "NP-26-0311",
+    "document_date": "2026-08-02",
+    "due_date": "2026-09-01",
+    "currency": "USD",
+    "subtotal": 845.0,
+    "tax_amount": 59.15,
+    "total_amount": 904.15
   }
 }

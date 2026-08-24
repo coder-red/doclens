@@ -8,7 +8,7 @@ Built for the messy real world: any vendor layout, scanned documents, phone phot
 
 | Requirement | How LedgerLens handles it |
 |---|---|
-| Structured fields from PDFs **and images** | Every input is rasterized (PyMuPDF/Pillow) and read by a vision LLM under a strict JSON schema — digital PDFs, scans, and photos take the same path |
+| Structured fields from PDFs **and images** | Every input is rasterized (PyMuPDF/Pillow) and read by a vision LLM under a strict JSON schema — digital PDFs, scans, photos, and Word documents take the same path (.docx is normalized to rendered pages first) |
 | Flag low-confidence extractions | Two independent flag sources: model-declared uncertainties (`fields_with_issues`) plus deterministic validation findings. Any finding routes the document out of the clean lane |
 | Validate totals against line items | Rule engine checks line items → subtotal → subtotal + tax = total within tolerance, plus date sanity, currency presence, sign rules, and magnitude-shift detection |
 | Handle multiple layouts | One schema-driven extractor covers all layouts — proven against two deliberately different fixtures (classic AP invoice vs. narrow thermal-receipt layout) and a degraded photo variant |
@@ -87,6 +87,7 @@ python fixtures/generate_fixtures.py
 
 - `layout_a_classic_invoice.pdf` — classic AP invoice: header block, itemized grid, totals block
 - `layout_b_receipt_style.pdf` — narrow receipt layout, EUR, inline items
+- `layout_c_word_invoice.docx` — Word-document invoice (plumbing services): proves the .docx normalization path
 - `layout_b_receipt_degraded.jpg` — rotated, blurred, noisy JPEG simulating a phone photo
 
 ### Tests
@@ -150,3 +151,4 @@ Free-tier note: SQLite lives on the instance disk — fine for demo/portfolio sc
 3. **Arithmetic as the routing signal.** Line-item reconciliation catches dropped/misread rows deterministically — no model opinion involved.
 4. **Repair pass instead of hard fail.** One bounded re-ask with the exact validation error recovers most schema drift without unbounded retries.
 5. **Provenance everywhere.** SHA-256 of inputs, raw responses, per-rule findings, review state — the audit log can answer "why did the system believe this number?" months later.
+

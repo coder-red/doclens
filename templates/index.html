@@ -20,7 +20,7 @@
   <div class="alert">No provider key configured &mdash; set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY in the environment.</div>
   {% endif %}
   <form id="upload-form" action="/extract" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+    <input type="file" name="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx" required>
     <button type="submit" class="btn primary">Extract fields</button>
     <span id="upload-status" class="status"></span>
   </form>

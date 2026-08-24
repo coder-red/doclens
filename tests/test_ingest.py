@@ -65,3 +65,16 @@ def test_degraded_photo_fixture_ingests(settings):
     data = (FIXTURES / "layout_b_receipt_degraded.jpg").read_bytes()
     pages = load_document(data, "layout_b_receipt_degraded.jpg", settings)
     assert len(pages) == 1
+
+
+def test_docx_fixture_renders_to_page_images(settings):
+    data = (FIXTURES / "layout_c_word_invoice.docx").read_bytes()
+    pages = load_document(data, "layout_c_word_invoice.docx", settings)
+    assert len(pages) >= 1
+    assert pages[0].png_bytes.startswith(b"\x89PNG")
+
+
+def test_corrupt_docx_rejected(settings):
+    with pytest.raises(IngestError) as excinfo:
+        load_document(b"PK\x03\x04 not a real docx payload", "fake.docx", settings)
+    assert "unreadable .docx" in str(excinfo.value)

@@ -31,15 +31,23 @@ _PDF_MAGIC = b"%PDF"
 def load_document(data: bytes, filename: str, settings: Settings) -> list[PageImage]:
     if data.startswith(_PDF_MAGIC):
         return _render_pdf(data, settings)
+    lower = filename.lower()
+    if lower.endswith(".docx"):
+        from .docx_render import DocxRenderError, render_docx_to_pdf
+
+        try:
+            pdf_bytes = render_docx_to_pdf(data)
+        except DocxRenderError as exc:
+            raise IngestError(str(exc)) from exc
+        return _render_pdf(pdf_bytes, settings)
     if _sniff_image(data):
         return _load_image(data, settings)
-    lower = filename.lower()
     if lower.endswith(".pdf"):
         return _render_pdf(data, settings)
     if lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
         return _load_image(data, settings)
     raise IngestError(
-        f"unsupported file type for '{filename}': provide a PDF, PNG, JPG, or WEBP document"
+        f"unsupported file type for '{filename}': provide a PDF, DOCX, PNG, JPG, or WEBP document"
     )
 
 
