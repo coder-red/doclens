@@ -160,7 +160,7 @@ def export_excel(store: Store = Depends(get_store)):
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="DocLens_extractions.xlsx"'},
+        headers={"Content-Disposition": 'attachment; filename="doclens_extractions.xlsx"'},
     )
 
 

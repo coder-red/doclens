@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("DocLens_LIVE_TEST"),
-    reason="set DocLens_LIVE_TEST=1 plus a provider key to run live extraction",
+    not os.environ.get("DOCLENS_LIVE_TEST"),
+    reason="set DOCLENS_LIVE_TEST=1 plus a provider key to run live extraction",
 )
 
 ROOT = Path(__file__).resolve().parents[1]

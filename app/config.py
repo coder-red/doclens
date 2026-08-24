@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     max_pages: int = 5
     max_image_px: int = 2000
 
-    db_path: Path = Path("data/DocLens.db")
+    db_path: Path = Path("data/doclens.db")
     export_dir: Path = Path("data")
 
     webhook_url: str | None = None

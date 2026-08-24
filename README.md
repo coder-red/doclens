@@ -11,8 +11,8 @@ Built for the messy real world: any vendor layout, scanned documents, phone phot
 | Structured fields from PDFs **and images** | Every input is rasterized (PyMuPDF/Pillow) and read by a vision LLM under a strict JSON schema — digital PDFs, scans, photos, and Word documents take the same path (.docx is normalized to rendered pages first) |
 | Flag low-confidence extractions | Two independent flag sources: model-declared uncertainties (`fields_with_issues`) plus deterministic validation findings. Any finding routes the document out of the clean lane |
 | Validate totals against line items | Rule engine checks line items → subtotal → subtotal + tax = total within tolerance, plus date sanity, currency presence, sign rules, and magnitude-shift detection |
-| Handle multiple layouts | One schema-driven extractor covers all layouts — proven against two deliberately different fixtures (classic AP invoice vs. narrow thermal-receipt layout) and a degraded photo variant |
-| Output to a real destination | Styled Excel workbook (Summary + LineItems sheets, disposition color-coding), optional signed webhook POST for approved records |
+| Handle multiple layouts | One schema-driven extractor covers all layouts — proven against three deliberately different fixtures (classic AP invoice, narrow thermal-receipt layout, Word-document invoice) and a degraded photo variant |
+| Output to a real destination | Styled Excel workbook (Summary + LineItems sheets, disposition color-coding), optional shared-secret webhook POST (`X-Webhook-Secret` header) for approved records |
 | Auditability | SQLite audit trail: SHA-256 of every source file, raw model response, per-rule findings, disposition, latency — exportable as JSONL |
 
 ## Why routing runs on arithmetic, not model confidence
@@ -45,8 +45,9 @@ A malformed first pass triggers one automatic schema-repair re-request before gi
             ┌──────────┐   pages    ┌─────────────────────┐
  upload ──▶ │  ingest  ├──────────▶ │  vision provider    │
  PDF/img    │ PyMuPDF  │  PNG       │ Gemini/OpenAI/Claude│
-            │ Pillow   │            │ schema-forced JSON  │
-            └──────────┘            └──────────┬──────────┘
+            │ Pillow   │            │ JSON-mode output,   │
+            └──────────┘            │ schema-validated    │
+                                    └──────────┬──────────┘
                                                │ raw JSON (+1 repair retry)
                                                ▼
             ┌──────────┐   findings  ┌─────────────────────┐
@@ -96,10 +97,10 @@ python fixtures/generate_fixtures.py
 .venv\Scripts\python -m pytest
 ```
 
-53 unit/API tests run fully offline against a fake provider. A live end-to-end test against the real LLM is opt-in:
+55 tests run fully offline against a fake provider. A live end-to-end test against the real LLM is opt-in:
 
-```bash
-set DocLens_LIVE_TEST=1 & set GEMINI_API_KEY=... & .venv\Scripts\python -m pytest tests\test_integration_live.py -v
+```cmd
+set DOCLENS_LIVE_TEST=1 && set GEMINI_API_KEY=... && .venv\Scripts\python -m pytest tests\test_integration_live.py -v
 ```
 
 ## HTTP API
@@ -127,22 +128,34 @@ curl -F "file=@fixtures/layout_b_receipt_style.pdf" http://127.0.0.1:8000/extrac
 |---|---|---|
 | `PROVIDER` | `auto` | `gemini` \| `openai` \| `anthropic` \| `auto` |
 | `GEMINI_API_KEY` etc. | — | first available key wins in auto mode |
-| `*_MODEL` | per-provider default | pin versions for production reproducibility |
+| `*_MODEL` | `gemini-2.5-flash` / `gpt-4o-mini` / `claude-sonnet-4-5-20250929` | override to pin whatever your provider currently offers |
 | `MAX_PAGES` | `5` | multi-page PDFs truncated defensively |
 | `MAX_IMAGE_PX` | `2000` | longest-side cap before upload |
-| `DB_PATH` | `data/DocLens.db` | SQLite audit store |
+| `DB_PATH` | `data/doclens.db` | SQLite audit store |
 | `WEBHOOK_URL` / `WEBHOOK_SECRET` | — | POSTs approved records with `X-Webhook-Secret`; delivery attempts are logged |
 
 ## Deployment
 
-Works anywhere Python runs. For [Render](https://render.com), this repo ships `render.yaml` + `Dockerfile`:
+Works anywhere Python runs. This repo ships `render.yaml` + `Dockerfile`. On [Render](https://render.com):
+
+- Easiest: Dashboard → **New → Web Service** → connect this repo → pick the Free instance → add `GEMINI_API_KEY` in Environment.
+- Or with the Render CLI:
 
 ```bash
-render blueprint launch        # or connect the repo in the Render dashboard
-# set GEMINI_API_KEY in the dashboard, deploy done
+render login
+render services create --name doclens --type web_service \
+  --repo https://github.com/coder-red/doclens --runtime python \
+  --build-command "pip install -r requirements.txt" \
+  --start-command "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 ```
 
-Free-tier note: SQLite lives on the instance disk — fine for demo/portfolio scale; swap `store.py` for Postgres for multi-instance production.
+Free-instance caveats (per [Render's docs](https://render.com/docs/free)):
+
+- The service sleeps after **15 minutes without traffic**; the next request waits ~1 minute while it spins back up.
+- The filesystem is **ephemeral**: the SQLite database is erased on every redeploy, restart, *and* spin-down. Treat hosted demo data as disposable; local runs keep everything.
+- A workspace shares **750 free instance hours/month** across all its free services — keeping several services awake 24/7 can exhaust the pool and suspend them until the month resets.
+
+For production: attach a persistent disk (paid) or swap `store.py` for Postgres — note free-tier Render Postgres expires 30 days after creation, so use a paid plan for anything real.
 
 ## Design decisions worth defending in an interview
 

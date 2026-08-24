@@ -17,7 +17,7 @@ from .routing import decide_disposition
 from .store import Store
 from .validation import validate_payload
 
-log = logging.getLogger("DocLens.pipeline")
+log = logging.getLogger("doclens.pipeline")
 
 
 @dataclass
@@ -139,3 +139,4 @@ def _dumps(raw: dict) -> str:
         return json.dumps(raw)[:4000]
     except TypeError:
         return str(raw)[:4000]
+

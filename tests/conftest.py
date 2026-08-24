@@ -57,7 +57,7 @@ def _default_payload() -> dict:
 def settings(tmp_path, monkeypatch):
     monkeypatch.delenv("WEBHOOK_URL", raising=False)
     s = Settings(
-        db_path=tmp_path / "test-DocLens.db",
+        db_path=tmp_path / "test-doclens.db",
         export_dir=tmp_path / "exports",
         gemini_api_key="test-key",
     )
@@ -87,3 +87,4 @@ def client(settings, monkeypatch):
     with TestClient(app) as c:
         c.fake_provider = fake  # type: ignore[attr-defined]
         yield c
+
