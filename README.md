@@ -1,6 +1,6 @@
 ﻿# DocLens
 
-Invoice, receipt, and credit-note extraction with **arithmetic guardrails** â€” a vision LLM reads any layout, then deterministic rules decide whether your books can trust the numbers.
+Invoice, receipt, and credit-note extraction with **arithmetic guardrails** a vision LLM reads any layout, then deterministic rules decide whether your books can trust the numbers.
 
 ![DocLens demo: upload â†’ extraction â†’ validation â†’ approved vs flagged routing](docs/demo.gif)
 
