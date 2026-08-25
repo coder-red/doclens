@@ -82,7 +82,7 @@ cp .env.example .env        # then add at least one API key (Windows: copy .env.
 uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000 (Windows venv paths: `.venv\Scripts\`). Any one of `GEMINI_API_KEY` (free tier works), `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` enables extraction. Provider is auto-selected by available keys, or pinned via `PROVIDER=`.
+Any one of `GEMINI_API_KEY` (free tier works), `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` enables extraction. Provider is auto-selected by available keys, or pinned via `PROVIDER=`.
 
 ### Test documents
 
