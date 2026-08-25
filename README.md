@@ -18,6 +18,7 @@ Built for the messy real world: any vendor layout, scanned documents, phone phot
 | Handle multiple layouts | One schema-driven extractor covers all layouts — proven against three deliberately different fixtures (classic AP invoice, narrow thermal-receipt layout, Word-document invoice) and a degraded photo variant |
 | Output to a real destination | Styled Excel workbook (Summary + LineItems sheets, disposition color-coding), optional shared-secret webhook POST (`X-Webhook-Secret` header) for approved records |
 | Auditability | SQLite audit trail: SHA-256 of every source file, raw model response, per-rule findings, disposition, latency — exportable as JSONL |
+| Duplicate & policy guards | Every upload is checked against processing history: identical files and repeated invoice numbers from similar vendors are rejected as likely duplicates (V011), resubmissions with a new number are warned (V012), and totals above `AUTO_APPROVE_MAX` always route to review (V013) |
 
 ## Why routing runs on arithmetic, not model confidence
 
@@ -27,12 +28,15 @@ Vision models are frequently *confidently wrong* on a misread digit, and their s
 line items sum ≈ printed subtotal          (V005, error)
 printed subtotal + tax ≈ printed total     (V006, error)
 required fields present                    (V001, error)
+duplicate file or repeated invoice number  (V011, error)
 dates parse / due ≥ issue                  (V002–V003)
 amounts without currency                   (V004, warning)
 negative amounts outside credit notes      (V007, warning)
 rows missing computable amounts            (V008, warning)
 magnitude shift between subtotal/total     (V010, warning)
 model-reported uncertain fields            (V009, warning)
+same vendor+amount, new invoice number     (V012, warning)
+total above auto-approval policy limit     (V013, warning)
 ```
 
 Dispositions:
@@ -135,6 +139,7 @@ curl -F "file=@fixtures/layout_b_receipt_style.pdf" http://127.0.0.1:8000/extrac
 | `MAX_IMAGE_PX` | `2000` | longest-side cap before upload |
 | `DB_PATH` | `data/doclens.db` | SQLite audit store |
 | `WEBHOOK_URL` / `WEBHOOK_SECRET` | — | POSTs approved records with `X-Webhook-Secret`; delivery attempts are logged |
+| `AUTO_APPROVE_MAX` | `5000` | totals above this route to review even when all checks pass; set 0 to disable |
 
 ## Deployment
 

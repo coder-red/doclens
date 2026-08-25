@@ -158,6 +158,18 @@ class Store:
             "failed": counts.get("failed", 0),
         }
 
+    def documents_for_duplicate_check(self) -> list[dict[str, Any]]:
+        query = """SELECT id, created_at, content_sha256, payload_json
+                   FROM documents WHERE disposition IN ('approved', 'flagged')"""
+        with self._connect() as conn:
+            rows = [dict(r) for r in conn.execute(query).fetchall()]
+        out = []
+        for r in rows:
+            payload_json = r.pop("payload_json", None)
+            r["payload"] = json.loads(payload_json) if payload_json else None
+            out.append(r)
+        return out
+
     def audit_log_lines(self) -> list[str]:
         records = self.list_documents(limit=100000)
         return [json.dumps(r, default=str) for r in records]

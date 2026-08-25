@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     webhook_secret: str | None = None
     webhook_timeout_s: float = 10.0
 
+    auto_approve_max: float = 5000.0
+
     app_name: str = "DocLens"
 
 

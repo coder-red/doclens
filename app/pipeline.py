@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from .config import Settings
+from .duplicates import check_duplicates, check_policy_limit
 from .exports.webhook import dispatch_approved
 from .ingest import IngestError, PageImage, load_document
 from .models import Disposition, ExtractionPayload, Finding
@@ -49,19 +50,25 @@ def process_document(
     raw, latency_s = _extract_with_repair(pages, provider)
     payload = _parse_payload(raw)
 
-    findings = validate_payload(payload) if payload else [
-        Finding(
-            rule_id="V000",
-            severity="error",
-            field="document",
-            message="model output could not be parsed into the extraction schema",
-        )
-    ]
+    content_sha256 = hashlib.sha256(data).hexdigest()
+    if payload is not None:
+        findings = validate_payload(payload)
+        findings += check_duplicates(payload, content_sha256, store.documents_for_duplicate_check())
+        findings += check_policy_limit(payload, settings.auto_approve_max)
+    else:
+        findings = [
+            Finding(
+                rule_id="V000",
+                severity="error",
+                field="document",
+                message="model output could not be parsed into the extraction schema",
+            )
+        ]
     disposition = decide_disposition(payload, findings)
 
     doc_id = store.insert_document(
         source_filename=filename,
-        content_sha256=hashlib.sha256(data).hexdigest(),
+        content_sha256=content_sha256,
         page_count=len(pages),
         provider=provider.name,
         model=provider.model,
