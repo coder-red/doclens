@@ -1,165 +1,132 @@
-# DocLens
+﻿# DocLens
 
-**Live demo: [doclenss.onrender.com](https://doclenss.onrender.com)** — free-tier hosting, so the first load after 15 idle minutes takes ~50 seconds to spin up. Uploads from the demo are disposable (ephemeral disk).
+Invoice, receipt, and credit-note extraction with **arithmetic guardrails** â€” a vision LLM reads any layout, then deterministic rules decide whether your books can trust the numbers.
 
-![DocLens: upload → extraction → arithmetic validation → flagged vs approved routing](docs/demo.gif)
+![DocLens demo: upload â†’ extraction â†’ validation â†’ approved vs flagged routing](docs/demo.gif)
 
-Invoice, receipt, and credit-note extraction with **arithmetic guardrails**. Upload a PDF or photo; get back structured fields (vendor, dates, totals, line items) that have been mechanically verified before they touch your books. Clean records are exported. Everything else is flagged — never silently booked.
+**Live demo:** [doclenss.onrender.com](https://doclenss.onrender.com) Â· free tier, so the first load after 15 idle minutes spins up for ~50 seconds, and uploaded data is disposable.
 
-Built for the messy real world: any vendor layout, scanned documents, phone photos of receipts.
+## Why it exists
 
-## What it does
+Accounts-payable teams can't paste raw documents into a chatbot: a confidently-wrong total silently corrupts the books. DocLens treats the model as a *reader*, not an authority â€” every extraction must survive mechanical checks (do the line items sum? does subtotal + tax equal the total? has this invoice been seen before?) before it's allowed near an export. Records that pass are auto-exported; everything else lands in a review queue with the exact failing rule highlighted.
 
-| Capability | How DocLens handles it |
-|---|---|
-| Structured fields from PDFs **and images** | Every input is rasterized (PyMuPDF/Pillow) and read by a vision LLM under a strict JSON schema — digital PDFs, scans, photos, and Word documents take the same path (.docx is normalized to rendered pages first) |
-| Flag low-confidence extractions | Two independent flag sources: model-declared uncertainties (`fields_with_issues`) plus deterministic validation findings. Any finding routes the document out of the clean lane |
-| Validate totals against line items | Rule engine checks line items → subtotal → subtotal + tax = total within tolerance, plus date sanity, currency presence, sign rules, and magnitude-shift detection |
-| Handle multiple layouts | One schema-driven extractor covers all layouts — proven against three deliberately different fixtures (classic AP invoice, narrow thermal-receipt layout, Word-document invoice) and a degraded photo variant |
-| Output to a real destination | Styled Excel workbook (Summary + LineItems sheets, disposition color-coding), optional shared-secret webhook POST (`X-Webhook-Secret` header) for approved records |
-| Auditability | SQLite audit trail: SHA-256 of every source file, raw model response, per-rule findings, disposition, latency — exportable as JSONL |
-| Duplicate & policy guards | Every upload is checked against processing history: identical files and repeated invoice numbers from similar vendors are rejected as likely duplicates (V011), resubmissions with a new number are warned (V012), and totals above `AUTO_APPROVE_MAX` always route to review (V013) |
+## What you get
 
-## Why routing runs on arithmetic, not model confidence
+- **Structured fields from any layout** â€” PDFs, scans, photos, and Word docs all take the same path; one schema-driven extractor instead of per-vendor templates
+- **Low-confidence flagging** â€” two independent sources: the model declares uncertain fields, and 13 deterministic rules re-check its work
+- **Duplicate detection** â€” identical files, repeated invoice numbers from look-alike vendors, and same-vendor/same-amount resubmissions under new numbers all get caught against processing history
+- **Policy controls** â€” totals above `AUTO_APPROVE_MAX` always route to human review, even when every check passes
+- **Real destinations** â€” styled Excel workbook (Summary + LineItems sheets) and optional signed-webhook POST for clean records
+- **Full auditability** â€” SHA-256 of every source file, raw model response, per-rule findings, review state; exportable as JSONL
 
-Vision models are frequently *confidently wrong* on a misread digit, and their self-reported certainty correlates poorly with correctness. DocLens therefore treats the model's own uncertainty flags as advisory only and makes the go/no-go decision from deterministic invariants:
+## How a document flows
 
 ```
-line items sum ≈ printed subtotal          (V005, error)
-printed subtotal + tax ≈ printed total     (V006, error)
-required fields present                    (V001, error)
-duplicate file or repeated invoice number  (V011, error)
-dates parse / due ≥ issue                  (V002–V003)
-amounts without currency                   (V004, warning)
-negative amounts outside credit notes      (V007, warning)
-rows missing computable amounts            (V008, warning)
-magnitude shift between subtotal/total     (V010, warning)
-model-reported uncertain fields            (V009, warning)
-same vendor+amount, new invoice number     (V012, warning)
-total above auto-approval policy limit     (V013, warning)
+upload â”€â–¶ ingest â”€â–¶ vision provider â”€â–¶ validate â”€â–¶ route â”€â–¶ store
+PDF/img/docx   (rasterize)   (JSON out,      13 rules    â”œâ”€ approved â–¶ Excel + webhook
+               PyMuPDF       +1 repair       + history   â”œâ”€ flagged  â–¶ review queue UI
+               Pillow        retry if off-   checks      â””â”€ failed   â–¶ audit log only
+                             schema)                     (everything lands in SQLite)
 ```
 
-Dispositions:
+Dispositions: **approved** = zero findings, safe to post Â· **flagged** = usable but held with exact failing rules shown Â· **failed** = nothing bookable.
 
-- **approved** — zero findings. Safe to auto-post; goes to Excel/webhook.
-- **flagged** — usable data, at least one finding. Held in the review queue with the exact failing rules highlighted next to each field.
-- **failed** — nothing bookable (unparseable output, not a financial document, all critical fields missing).
+### Validation rules
 
-A malformed first pass triggers one automatic schema-repair re-request before giving up.
+| Rule | Check | Severity |
+|---|---|---|
+| V001 | required fields present (vendor, invoice #, total) | error |
+| V002â€“V003 | dates parse as ISO; due date â‰¥ issue date; not future-dated | error / warning |
+| V004 | amounts present but currency unknown | warning |
+| V005 | Î£ line items â‰ˆ printed subtotal (tolerance-based) | error |
+| V006 | printed subtotal + tax â‰ˆ printed total | error |
+| V007 | negative amounts outside credit notes | warning |
+| V008 | line rows with no computable amount | warning |
+| V009 | model-declared uncertain fields | warning |
+| V010 | total differs from subtotal by â‰¥10Ã— (magnitude misread) | warning |
+| V011 | duplicate: identical file, or repeated vendor + invoice number | error |
+| V012 | same vendor + amount + date under a new invoice number | warning |
+| V013 | total above the `AUTO_APPROVE_MAX` policy limit | warning |
 
-## Architecture
+Routing runs on these outcomes â€” never on the model's self-reported confidence, which correlates poorly with correctness on misread digits.
 
-```
-            ┌──────────┐   pages    ┌─────────────────────┐
- upload ──▶ │  ingest  ├──────────▶ │  vision provider    │
- PDF/img    │ PyMuPDF  │  PNG       │ Gemini/OpenAI/Claude│
-            │ Pillow   │            │ JSON-mode output,   │
-            └──────────┘            │ schema-validated    │
-                                    └──────────┬──────────┘
-                                               │ raw JSON (+1 repair retry)
-                                               ▼
-            ┌──────────┐   findings  ┌─────────────────────┐
-            │ validate │◀────────────┤ ExtractionPayload   │
-            │ V001-V010│             │ (Pydantic contract) │
-            └────┬─────┘             └─────────────────────┘
-                 ▼
-            ┌──────────┐      ┌──────────────────────────────┐
-            │  route   ├────▶ │ approved → Excel + webhook   │
-            └────┬─────┘      │ flagged   → review queue UI  │
-                 │            │ failed    → audit log only   │
-                 ▼            └──────────────────────────────┘
-            ┌──────────┐
-            │  store   │  SQLite: payload, findings, raw response,
-            └──────────┘  SHA-256, review state, webhook deliveries
-```
+## Stack
 
-## Quickstart
+Python 3.12 Â· FastAPI Â· Pydantic v2 (schema shared with providers) Â· PyMuPDF + Pillow + python-docx Â· Gemini / OpenAI / Claude vision via plain REST (httpx, swappable) Â· SQLite Â· openpyxl Â· Jinja2 Â· pytest
+
+## Run it locally
 
 ```bash
-python -m venv .venv
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # then add at least one API key (Windows: copy .env.example .env)
+cp .env.example .env          # add at least one key: GEMINI_API_KEY (free tier), OPENAI_API_KEY, or ANTHROPIC_API_KEY
 uvicorn app.main:app --reload
 ```
 
+<<<<<<< HEAD
 Any one of `GEMINI_API_KEY` (free tier works), `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` enables extraction. Provider is auto-selected by available keys, or pinned via `PROVIDER=`.
+=======
+Providers are auto-selected by available keys; pin one with `PROVIDER=`.
+>>>>>>> f7a6125 (Rewrite README: product-first structure, rules table, current counts)
 
-### Test documents
-
-Generate the fixture set (no API key needed):
+Demo fixtures (no API key needed):
 
 ```bash
 python fixtures/generate_fixtures.py
 ```
 
-- `layout_a_classic_invoice.pdf` — classic AP invoice: header block, itemized grid, totals block
-- `layout_b_receipt_style.pdf` — narrow receipt layout, EUR, inline items
-- `layout_c_word_invoice.docx` — Word-document invoice (plumbing services): proves the .docx normalization path
-- `layout_b_receipt_degraded.jpg` — rotated, blurred, noisy JPEG simulating a phone photo
+| Fixture | Layout |
+|---|---|
+| `layout_a_classic_invoice.pdf` | classic AP invoice: header block, itemized grid, totals block |
+| `layout_b_receipt_style.pdf` | narrow thermal-receipt layout, EUR, inline items |
+| `layout_c_word_invoice.docx` | Word-document invoice (.docx normalization path) |
+| `layout_b_receipt_degraded.jpg` | rotated, blurred, noisy JPEG simulating a phone photo |
 
-## Tests
-
-```bash
-python -m pytest
-```
-
-55 tests run fully offline against a fake provider. A live end-to-end test against the real LLM is opt-in:
-
-```cmd
-set DOCLENS_LIVE_TEST=1 && set GEMINI_API_KEY=... && python -m pytest tests\test_integration_live.py -v
-```
+**Tests:** `python -m pytest` â€” 67 offline tests against a fake provider. A live end-to-end test against the real LLM is opt-in: `DOCLENS_LIVE_TEST=1` plus a provider key.
 
 ## HTTP API
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/extract` | multipart `file` → full pipeline; returns the stored record |
+| POST | `/extract` | multipart `file` â†’ full pipeline; returns the stored record |
 | GET | `/api/documents?disposition=flagged` | list records (filterable) |
-| GET | `/api/documents/{id}` | single record incl. findings + raw model response |
+| GET | `/api/documents/{id}` | record incl. findings + raw model response |
 | PATCH | `/api/documents/{id}/review` | human review decision `{review_status, review_note}` |
-| GET | `/export/excel.xlsx` | workbook: Summary + LineItems, color-coded dispositions |
-| GET | `/export/audit-log.jsonl` | full audit trail, one JSON record per processed file |
+| GET | `/export/excel.xlsx` | Summary + LineItems workbook, color-coded dispositions |
+| GET | `/export/audit-log.jsonl` | full audit trail |
 | GET | `/export/webhook-deliveries.jsonl` | webhook delivery outcomes |
 | GET | `/healthz` | liveness probe |
 
-Example:
-
 ```bash
-curl -F "file=@fixtures/layout_b_receipt_style.pdf" http://127.0.0.1:8000/extract
+curl -F "file=@fixtures/layout_a_classic_invoice.pdf" http://127.0.0.1:8000/extract
 ```
 
 ## Configuration
 
 | Variable | Default | Notes |
 |---|---|---|
-| `PROVIDER` | `auto` | `gemini` \| `openai` \| `anthropic` \| `auto` |
-| `GEMINI_API_KEY` etc. | — | first available key wins in auto mode |
-| `*_MODEL` | `gemini-2.5-flash` / `gpt-4o-mini` / `claude-sonnet-4-5-20250929` | override to pin whatever your provider currently offers |
-| `MAX_PAGES` | `5` | multi-page PDFs truncated defensively |
-| `MAX_IMAGE_PX` | `2000` | longest-side cap before upload |
+| `PROVIDER` | `auto` | `gemini` \| `openai` \| `anthropic` \| auto-detected by available keys |
+| `*_MODEL` | `gemini-2.5-flash` / `gpt-4o-mini` / `claude-sonnet-4-5-20250929` | override to pin your provider's current version |
+| `AUTO_APPROVE_MAX` | `5000` | totals above this always go to review; `0` disables |
+| `MAX_PAGES` / `MAX_IMAGE_PX` | `5` / `2000` | input caps before upload |
 | `DB_PATH` | `data/doclens.db` | SQLite audit store |
-| `WEBHOOK_URL` / `WEBHOOK_SECRET` | — | POSTs approved records with `X-Webhook-Secret`; delivery attempts are logged |
-| `AUTO_APPROVE_MAX` | `5000` | totals above this route to review even when all checks pass; set 0 to disable |
+| `WEBHOOK_URL` / `WEBHOOK_SECRET` | â€” | POSTs approved records with `X-Webhook-Secret`; attempts logged |
 
 ## Deployment
 
-The repo ships `render.yaml` + `Dockerfile`. Easiest path on [Render](https://render.com): Dashboard → **New → Web Service** → connect this repo → Free instance → add `GEMINI_API_KEY` in Environment.
-
-Free-instance caveats: the service sleeps after 15 idle minutes (~1 min wake-up), and the filesystem is ephemeral — hosted demo data is disposable. For production, attach a persistent disk or swap `store.py` for Postgres.
+Ships with `render.yaml` + `Dockerfile`. On Render: Dashboard â†’ **New â†’ Web Service** â†’ connect repo â†’ Free instance â†’ add `GEMINI_API_KEY`. Free-tier trade-offs: sleeps after 15 idle minutes (~1 min wake-up) and the filesystem resets on restart â€” hosted demo data is disposable.
 
 ## Engineering decisions
 
-1. **One schema, N layouts.** Per-vendor templates don't scale past ~10 vendors. The Pydantic contract (`app/models.py`) doubles as the JSON-schema constraint sent to providers and the runtime validator — one source of truth.
-2. **Escape hatches over guesses.** The prompt and schema make `null` + an issue entry a *first-class success outcome*. The failure mode that matters isn't crashing, it's a plausible wrong total.
-3. **Arithmetic as the routing signal.** Line-item reconciliation catches dropped/misread rows deterministically — no model opinion involved.
-4. **Repair pass instead of hard fail.** One bounded re-ask with the exact validation error recovers most schema drift without unbounded retries.
-5. **Provenance everywhere.** SHA-256 of inputs, raw responses, per-rule findings, review state — the audit log can answer "why did the system believe this number?" months later.
+1. **One schema, N layouts.** The Pydantic contract (`app/models.py`) is both the constraint sent to providers and the runtime validator â€” a single source of truth instead of per-vendor templates.
+2. **Escape hatches over guesses.** `null` + a declared issue is a first-class outcome; the dangerous failure isn't crashing, it's a plausible wrong total.
+3. **Arithmetic as the routing signal.** Reconciliation catches misreads deterministically â€” arithmetic doesn't have opinions.
+4. **Bounded repair pass.** One re-ask with the exact schema error recovers most malformed output without unbounded retries.
+5. **Provenance everywhere.** Input hashes, raw responses, findings, review state â€” the log answers "why did the system believe this number?" months later.
 
 ## Known limitations
 
-- **Single-node storage.** SQLite is deliberate at this scale but means one worker; multi-instance needs Postgres.
-- **Demo hosting is disposable by design** — free-tier filesystem wipes on restart; durable deployments need a disk or managed DB.
-- **English/latin-script documents only** were validated; other scripts need prompt and fixture coverage.
-- **No auth** on the review UI — fine as an internal tool behind a VPN, not exposed as-is.
-- **Next up:** reviewer-side field correction with re-validation, and per-vendor accuracy tracking from the audit log.
-
+- Single-node SQLite by design; multi-instance needs Postgres (`store.py` is the only module to swap).
+- Validated against English/latin-script documents; other scripts need prompt and fixture coverage.
+- No auth on the review UI â€” internal tool, don't expose it raw.
+- Roadmap: reviewer-side field corrections with re-validation, per-vendor accuracy tracking from the audit log, PO 2/3-way matching.
